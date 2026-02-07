@@ -603,924 +603,850 @@
     </div>
 
     <script>
-        // ===== إعدادات API =====
-        const API_KEY = 'goldapi-5w1smlbz71f5-io';
-        const API_URL = 'https://www.goldapi.io/api/XAU/USD';
+    // ===== إعدادات API الجديدة (Metals.Dev) =====
+    const METALS_DEV_API_KEY = 'XNW5PAHHNVMDI2OJBCM6333OJBCM6';
+    const API_BASE_URL = 'https://api.metals.dev/v1/latest';
+    
+    let priceHistory = [];
+    let previousPrice = null;
+    let currentGoldPrice = 2150;
+    let chartHistory = [];
+    let isUsingRealData = false;
+
+    // ===== تحميل البيانات المحفوظة =====
+    function loadSavedData() {
+        try {
+            const saved = localStorage.getItem('goldPriceHistory');
+            if (saved) {
+                const data = JSON.parse(saved);
+                if (data.timestamp && (Date.now() - data.timestamp < 24 * 60 * 60 * 1000)) {
+                    priceHistory = data.prices || [];
+                    previousPrice = data.previousPrice || null;
+                    currentGoldPrice = priceHistory.length > 0 ? priceHistory[priceHistory.length - 1] : 2150;
+                    chartHistory = data.chartHistory || [];
+                    return true;
+                }
+            }
+        } catch (e) {
+            console.log('لا توجد بيانات محفوظة');
+        }
+        return false;
+    }
+
+    // ===== حفظ البيانات =====
+    function saveData() {
+        try {
+            localStorage.setItem('goldPriceHistory', JSON.stringify({
+                prices: priceHistory,
+                previousPrice: previousPrice,
+                chartHistory: chartHistory,
+                timestamp: Date.now()
+            }));
+        } catch (e) {
+            console.log('تم حفظ البيانات');
+        }
+    }
+
+    // ===== جلب بيانات الذهب من Metals.Dev API =====
+    async function fetchGoldPrice() {
+        const loadingEl = document.getElementById('loading');
+        const contentEl = document.getElementById('mainContent');
         
-        let priceHistory = [];
-        let previousPrice = null;
-        let currentGoldPrice = 2150;
-        let chartData = [];
-        let chartHistory = [];
-        let isUsingRealData = false;
+        loadingEl.style.display = 'block';
+        contentEl.style.display = 'none';
 
-        // ===== تحميل البيانات المحفوظة =====
-        function loadSavedData() {
-            try {
-                const saved = localStorage.getItem('goldPriceHistory');
-                if (saved) {
-                    const data = JSON.parse(saved);
-                    if (data.timestamp && (Date.now() - data.timestamp < 24 * 60 * 60 * 1000)) {
-                        priceHistory = data.prices || [];
-                        previousPrice = data.previousPrice || null;
-                        currentGoldPrice = priceHistory.length > 0 ? priceHistory[priceHistory.length - 1] : 2150;
-                        chartHistory = data.chartHistory || [];
-                        return true;
-                    }
+        try {
+            console.log('جاري الاتصال بـ Metals.Dev API...');
+            
+            // بناء رابط الطلب حسب وثائق Metals.Dev
+            const apiUrl = `${API_BASE_URL}?api_key=${METALS_DEV_API_KEY}&currency=USD&unit=toz`;
+            
+            const response = await fetch(apiUrl, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
                 }
-            } catch (e) {
-                console.log('لا توجد بيانات محفوظة');
-            }
-            return false;
-        }
-
-        // ===== حفظ البيانات =====
-        function saveData() {
-            try {
-                localStorage.setItem('goldPriceHistory', JSON.stringify({
-                    prices: priceHistory,
-                    previousPrice: previousPrice,
-                    chartHistory: chartHistory,
-                    timestamp: Date.now()
-                }));
-            } catch (e) {
-                console.log('تم حفظ البيانات');
-            }
-        }
-
-        // ===== جلب بيانات الذهب من GoldAPI.io =====
-        async function fetchGoldPrice() {
-            const loadingEl = document.getElementById('loading');
-            const contentEl = document.getElementById('mainContent');
+            });
             
-            loadingEl.style.display = 'block';
-            contentEl.style.display = 'none';
-
-            try {
-                console.log('جاري الاتصال بـ GoldAPI.io...');
-                
-                const response = await fetch(API_URL, {
-                    method: 'GET',
-                    headers: {
-                        'x-access-token': API_KEY,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                console.log('حالة الاستجابة:', response.status, response.statusText);
-                
-                if (!response.ok) {
-                    if (response.status === 403) {
-                        throw new Error('مفتاح API غير صالح أو منتهي الصلاحية');
-                    } else if (response.status === 429) {
-                        throw new Error('تم تجاوز حد الطلبات اليومي');
-                    } else {
-                        throw new Error(`خطأ في GoldAPI: ${response.status}`);
-                    }
-                }
-
-                const data = await response.json();
-                console.log('البيانات المستلمة من GoldAPI:', data);
-                
-                // معالجة البيانات من GoldAPI.io
-                if (!data || typeof data.price !== 'number') {
-                    throw new Error('البيانات المستلمة غير صحيحة');
-                }
-                
-                const goldData = {
-                    price: parseFloat(data.price),
-                    timestamp: Math.floor(Date.now() / 1000),
-                    high_price: data.high_price ? parseFloat(data.high_price) : parseFloat(data.price) * 1.01,
-                    low_price: data.low_price ? parseFloat(data.low_price) : parseFloat(data.price) * 0.99,
-                    open_price: data.open_price ? parseFloat(data.open_price) : parseFloat(data.price) * 0.998,
-                    prev_close_price: data.prev_close_price ? parseFloat(data.prev_close_price) : parseFloat(data.price) * 1.002,
-                    source: 'GoldAPI.io'
-                };
-                
-                loadingEl.style.display = 'none';
-                contentEl.style.display = 'block';
-                
-                isUsingRealData = true;
-                updateDisplay(goldData);
-                saveData();
-
-            } catch (error) {
-                console.error('خطأ في جلب البيانات من GoldAPI:', error);
-                await tryAlternativeSources();
+            console.log('حالة الاستجابة:', response.status, response.statusText);
+            
+            if (!response.ok) {
+                throw new Error(`خطأ في API: ${response.status}`);
             }
-        }
 
-        // ===== تجربة مصادر بديلة =====
-        async function tryAlternativeSources() {
-            const loadingEl = document.getElementById('loading');
+            const data = await response.json();
+            console.log('✅ البيانات المستلمة من Metals.Dev:', data);
             
-            console.log('تجربة مصادر بديلة...');
-            
-            // المصدر البديل 1: Yahoo Finance API
-            try {
-                const response = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=1d', {
-                    method: 'GET',
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0'
-                    }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('البيانات من Yahoo Finance:', data);
-                    
-                    if (data.chart && data.chart.result && data.chart.result[0]) {
-                        const result = data.chart.result[0];
-                        const price = result.meta.regularMarketPrice;
-                        
-                        const goldData = {
-                            price: parseFloat(price),
-                            timestamp: Math.floor(Date.now() / 1000),
-                            high_price: result.meta.regularMarketDayHigh || parseFloat(price) * 1.01,
-                            low_price: result.meta.regularMarketDayLow || parseFloat(price) * 0.99,
-                            open_price: result.meta.regularMarketOpen || parseFloat(price) * 0.998,
-                            prev_close_price: result.meta.previousClose || parseFloat(price) * 1.002,
-                            source: 'Yahoo Finance'
-                        };
-                        
-                        loadingEl.style.display = 'none';
-                        document.getElementById('mainContent').style.display = 'block';
-                        
-                        isUsingRealData = true;
-                        updateDisplay(goldData);
-                        saveData();
-                        return;
-                    }
-                }
-            } catch (error) {
-                console.log('Yahoo Finance غير متاح:', error);
+            // معالجة البيانات من Metals.Dev API
+            if (!data || data.status !== 'success' || !data.metals || typeof data.metals.gold !== 'number') {
+                throw new Error('البيانات المستلمة غير صحيحة أو غير مكتملة');
             }
             
-            // المصدر البديل 2: Investing.com
-            try {
-                const response = await fetch('https://api.investing.com/api/financialdata/8830', {
-                    method: 'GET',
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0'
-                    }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('البيانات من Investing.com:', data);
-                    
-                    if (data.data && data.data.last) {
-                        const goldData = {
-                            price: parseFloat(data.data.last),
-                            timestamp: Math.floor(Date.now() / 1000),
-                            high_price: parseFloat(data.data.last) * 1.01,
-                            low_price: parseFloat(data.data.last) * 0.99,
-                            open_price: parseFloat(data.data.last),
-                            prev_close_price: priceHistory.length > 0 ? priceHistory[priceHistory.length - 1] : parseFloat(data.data.last),
-                            source: 'Investing.com'
-                        };
-                        
-                        loadingEl.style.display = 'none';
-                        document.getElementById('mainContent').style.display = 'block';
-                        
-                        isUsingRealData = true;
-                        updateDisplay(goldData);
-                        saveData();
-                        return;
-                    }
-                }
-            } catch (error) {
-                console.log('Investing.com غير متاح:', error);
-            }
+            const goldPrice = data.metals.gold;
             
-            // إذا فشلت جميع المصادر، استخدم بيانات واقعية محسوبة
-            useRealisticSimulatedData();
-        }
-
-        // ===== بيانات محاكاة واقعية =====
-        function useRealisticSimulatedData() {
-            console.log('استخدام بيانات محاكاة واقعية...');
-            
-            // قاعدة سعر واقعية مع تغيير محسوب
-            let basePrice = 2150;
-            if (priceHistory.length > 0) {
-                basePrice = priceHistory[priceHistory.length - 1];
-            }
-            
-            // تغيير واقعي بناءً على اتجاه السوق
-            let change = 0;
-            const marketTrend = Math.random();
-            
-            if (marketTrend > 0.7) {
-                // اتجاه صعودي قوي
-                change = (Math.random() * 15 + 5);
-            } else if (marketTrend < 0.3) {
-                // اتجاه هبوطي قوي
-                change = -(Math.random() * 15 + 5);
-            } else {
-                // تغيير طفيف
-                change = (Math.random() - 0.5) * 10;
-            }
-            
-            const newPrice = basePrice + change;
+            // حساب أسعار عالية/منخفضة تقديرية إذا لم تكن متوفرة في الرد
+            const estimatedHigh = goldPrice * 1.008; // +0.8%
+            const estimatedLow = goldPrice * 0.995;  // -0.5%
             
             const goldData = {
-                price: newPrice,
-                timestamp: Math.floor(Date.now() / 1000),
-                high_price: newPrice + Math.random() * 10,
-                low_price: newPrice - Math.random() * 10,
-                open_price: basePrice,
-                prev_close_price: priceHistory.length > 0 ? priceHistory[priceHistory.length - 1] : newPrice,
-                source: 'محاكاة واقعية'
+                price: goldPrice,
+                timestamp: Math.floor(new Date(data.timestamp).getTime() / 1000) || Math.floor(Date.now() / 1000),
+                high_price: estimatedHigh,
+                low_price: estimatedLow,
+                open_price: previousPrice || goldPrice * 0.998,
+                prev_close_price: previousPrice || goldPrice,
+                source: 'Metals.Dev API'
             };
             
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('mainContent').style.display = 'block';
+            loadingEl.style.display = 'none';
+            contentEl.style.display = 'block';
             
-            isUsingRealData = false;
+            isUsingRealData = true;
             updateDisplay(goldData);
             saveData();
-        }
 
-        // ===== تحديث الواجهة =====
-        function updateDisplay(data) {
-            // تحديث السعر الحالي
-            currentGoldPrice = data.price;
-            priceHistory.push(currentGoldPrice);
+        } catch (error) {
+            console.error('❌ خطأ في جلب البيانات من Metals.Dev:', error);
             
-            // الاحتفاظ بآخر 100 سعر فقط
-            if (priceHistory.length > 100) {
-                priceHistory.shift();
-            }
+            // إظهار رسالة خطأ واضحة في الواجهة
+            document.getElementById('loading').innerHTML = `
+                <div style="color: #ff4757;">
+                    <div class="spinner" style="border-top-color: #ff4757;"></div>
+                    <p>فشل الاتصال بـ Metals.Dev API</p>
+                    <p style="font-size: 0.9em; margin-top: 10px;">${error.message}</p>
+                    <p style="font-size: 0.8em; margin-top: 15px;">جاري استخدام بيانات محاكاة واقعية...</p>
+                </div>
+            `;
             
-            // تحديث بيانات الرسم البياني
-            updateChartData(currentGoldPrice);
-            
-            // عرض السعر
-            document.getElementById('currentPrice').textContent = '$' + data.price.toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            });
-            
-            // حساب وعرض التغير
-            let change = 0;
-            let changePercent = 0;
-            
-            if (data.prev_close_price) {
-                change = data.price - data.prev_close_price;
-                changePercent = (change / data.prev_close_price) * 100;
-            } else if (previousPrice !== null) {
-                change = data.price - previousPrice;
-                changePercent = (change / previousPrice) * 100;
-            } else if (priceHistory.length >= 2) {
-                const prevPrice = priceHistory[priceHistory.length - 2];
-                change = data.price - prevPrice;
-                changePercent = (change / prevPrice) * 100;
-            }
-            
-            const changeEl = document.getElementById('priceChange');
-            if (change > 0) {
-                changeEl.className = 'price-change price-up';
-                changeEl.innerHTML = `▲ $${Math.abs(change).toFixed(2)} (+${changePercent.toFixed(2)}%)`;
-            } else if (change < 0) {
-                changeEl.className = 'price-change price-down';
-                changeEl.innerHTML = `▼ $${Math.abs(change).toFixed(2)} (${changePercent.toFixed(2)}%)`;
-            } else {
-                changeEl.className = 'price-change';
-                changeEl.innerHTML = `━ بدون تغيير`;
-            }
-            
-            // الإحصائيات
-            document.getElementById('highPrice').textContent = '$' + data.high_price.toFixed(2);
-            document.getElementById('lowPrice').textContent = '$' + data.low_price.toFixed(2);
-            document.getElementById('openPrice').textContent = '$' + data.open_price.toFixed(2);
-            document.getElementById('prevClose').textContent = '$' + (data.prev_close_price || data.price).toFixed(2);
-            
-            // التحليل الفني
-            performTechnicalAnalysis(data.price);
-            
-            // وقت التحديث
-            const date = new Date(data.timestamp * 1000);
-            let sourceText = '';
-            if (!isUsingRealData) {
-                sourceText = '<br><small style="color: #ff4757;">⚠️ استخدام بيانات محاكاة - تحقق من اتصال API</small>';
-            }
-            
-            document.getElementById('lastUpdate').innerHTML = 
-                `⏰ آخر تحديث: ${date.toLocaleString('ar-EG')}<br>` +
-                `<small style="color: #ffd700;">المصدر: ${data.source}</small>` +
-                sourceText;
-            
-            // تحديث الجدول
-            updateHistoryTable(data, change, changePercent);
-            
-            // تحديث الرسم البياني
-            updateChart();
-            
-            // حفظ السعر السابق
-            previousPrice = data.price;
+            // استخدام بيانات محاكاة بعد فترة وجيزة
+            setTimeout(() => {
+                useRealisticSimulatedData();
+            }, 2000);
         }
+    }
 
-        // ===== تحديث بيانات الرسم البياني =====
-        function updateChartData(newPrice) {
-            const now = Date.now();
-            
-            // إضافة نقطة بيانات جديدة
-            chartHistory.push({
-                time: now,
-                price: newPrice,
-                timestamp: Math.floor(now / 1000)
-            });
-            
-            // الاحتفاظ بآخر 50 نقطة فقط
-            if (chartHistory.length > 50) {
-                chartHistory.shift();
-            }
+    // ===== بيانات محاكاة واقعية =====
+    function useRealisticSimulatedData() {
+        console.log('استخدام بيانات محاكاة واقعية...');
+        
+        let basePrice = 2150;
+        if (priceHistory.length > 0) {
+            basePrice = priceHistory[priceHistory.length - 1];
         }
-
-        // ===== الرسم البياني =====
-        function updateChart() {
-            const canvas = document.getElementById('priceChart');
-            const ctx = canvas.getContext('2d');
-            
-            // ضبط حجم Canvas
-            canvas.width = canvas.offsetWidth;
-            canvas.height = 400;
-            
-            if (chartHistory.length < 2) {
-                // رسالة عند عدم وجود بيانات كافية
-                ctx.fillStyle = '#b8c6db';
-                ctx.font = '16px Cairo';
-                ctx.textAlign = 'center';
-                ctx.fillText('جاري جمع بيانات كافية للرسم البياني...', canvas.width / 2, canvas.height / 2);
-                return;
-            }
-            
-            // تنظيف Canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // إعداد المساحات
-            const padding = { top: 40, right: 30, bottom: 50, left: 60 };
-            const chartWidth = canvas.width - padding.left - padding.right;
-            const chartHeight = canvas.height - padding.top - padding.bottom;
-            
-            // إيجاد الحد الأدنى والأقصى للأسعار
-            let minPrice = Infinity;
-            let maxPrice = -Infinity;
-            let minTime = Infinity;
-            let maxTime = -Infinity;
-            
-            chartHistory.forEach(item => {
-                if (item.price < minPrice) minPrice = item.price;
-                if (item.price > maxPrice) maxPrice = item.price;
-                if (item.time < minTime) minTime = item.time;
-                if (item.time > maxTime) maxTime = item.time;
-            });
-            
-            const priceRange = maxPrice - minPrice;
-            const timeRange = maxTime - minTime;
-            
-            // رسم الشبكة الخلفية
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.lineWidth = 1;
-            
-            // خطوط أفقية
-            for (let i = 0; i <= 5; i++) {
-                const y = padding.top + (chartHeight / 5) * i;
-                ctx.beginPath();
-                ctx.moveTo(padding.left, y);
-                ctx.lineTo(canvas.width - padding.right, y);
-                ctx.stroke();
-                
-                // تسميات الأسعار
-                ctx.fillStyle = '#b8c6db';
-                ctx.font = '12px Cairo';
-                ctx.textAlign = 'right';
-                const price = maxPrice - (priceRange / 5) * i;
-                ctx.fillText('$' + price.toFixed(0), padding.left - 10, y + 4);
-            }
-            
-            // رسم الخط البياني
-            ctx.beginPath();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = '#ffd700';
-            
-            chartHistory.forEach((item, index) => {
-                const x = padding.left + ((item.time - minTime) / timeRange) * chartWidth;
-                const y = padding.top + chartHeight - ((item.price - minPrice) / priceRange) * chartHeight;
-                
-                if (index === 0) {
-                    ctx.moveTo(x, y);
-                } else {
-                    ctx.lineTo(x, y);
-                }
-            });
-            
-            ctx.stroke();
-            
-            // رسم النقاط
-            ctx.fillStyle = '#ffd700';
-            chartHistory.forEach((item, index) => {
-                const x = padding.left + ((item.time - minTime) / timeRange) * chartWidth;
-                const y = padding.top + chartHeight - ((item.price - minPrice) / priceRange) * chartHeight;
-                
-                // رسم نقاط صغيرة
-                ctx.beginPath();
-                ctx.arc(x, y, 3, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // هالة حول النقطة الأخيرة
-                if (index === chartHistory.length - 1) {
-                    ctx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(x, y, 8, 0, Math.PI * 2);
-                    ctx.stroke();
-                }
-            });
-            
-            // تسميات الوقت
-            ctx.fillStyle = '#b8c6db';
-            ctx.font = '11px Cairo';
-            ctx.textAlign = 'center';
-            
-            if (chartHistory.length >= 3) {
-                const startTime = new Date(chartHistory[0].time);
-                const middleTime = new Date(chartHistory[Math.floor(chartHistory.length / 2)].time);
-                const endTime = new Date(chartHistory[chartHistory.length - 1].time);
-                
-                const startX = padding.left;
-                const middleX = padding.left + chartWidth / 2;
-                const endX = padding.left + chartWidth;
-                
-                ctx.fillText(startTime.toLocaleTimeString('ar-EG', {hour: '2-digit', minute: '2-digit'}), 
-                           startX, canvas.height - padding.bottom + 20);
-                ctx.fillText(middleTime.toLocaleTimeString('ar-EG', {hour: '2-digit', minute: '2-digit'}), 
-                           middleX, canvas.height - padding.bottom + 20);
-                ctx.fillText(endTime.toLocaleTimeString('ar-EG', {hour: '2-digit', minute: '2-digit'}), 
-                           endX, canvas.height - padding.bottom + 20);
-            }
-            
-            // عنوان الرسم البياني
-            ctx.fillStyle = '#ffd700';
-            ctx.font = 'bold 16px Cairo';
-            ctx.textAlign = 'center';
-            ctx.fillText('أسعار الذهب (XAU/USD) - تحديث حي', canvas.width / 2, padding.top - 10);
-            
-            // إضافة خط متوسط السعر
-            const avgPrice = (minPrice + maxPrice) / 2;
-            const avgY = padding.top + chartHeight - ((avgPrice - minPrice) / priceRange) * chartHeight;
-            
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-            ctx.lineWidth = 1;
-            ctx.setLineDash([5, 5]);
-            ctx.beginPath();
-            ctx.moveTo(padding.left, avgY);
-            ctx.lineTo(canvas.width - padding.right, avgY);
-            ctx.stroke();
-            ctx.setLineDash([]);
+        
+        // تغيير واقعي بناءً على اتجاه السوق
+        let change = 0;
+        const marketTrend = Math.random();
+        
+        if (marketTrend > 0.7) {
+            change = (Math.random() * 15 + 5);
+        } else if (marketTrend < 0.3) {
+            change = -(Math.random() * 15 + 5);
+        } else {
+            change = (Math.random() - 0.5) * 10;
         }
+        
+        const newPrice = basePrice + change;
+        
+        const goldData = {
+            price: newPrice,
+            timestamp: Math.floor(Date.now() / 1000),
+            high_price: newPrice + Math.random() * 10,
+            low_price: newPrice - Math.random() * 10,
+            open_price: basePrice,
+            prev_close_price: priceHistory.length > 0 ? priceHistory[priceHistory.length - 1] : newPrice,
+            source: 'محاكاة واقعية (فشل الاتصال بالخادم)'
+        };
+        
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('mainContent').style.display = 'block';
+        
+        isUsingRealData = false;
+        updateDisplay(goldData);
+        saveData();
+    }
 
-        // ===== التحليل الفني =====
-        function performTechnicalAnalysis(currentPrice) {
-            if (priceHistory.length < 3) return;
-            
-            // حساب RSI
-            const rsi = calculateRSI(priceHistory);
-            document.getElementById('rsiValue').textContent = rsi.toFixed(2);
-            
-            // حساب المتوسط المتحرك
-            const sma20 = calculateSMA(priceHistory, 20);
-            document.getElementById('maValue').textContent = '$' + sma20.toFixed(2);
-            
-            // حساب Bollinger Bands
-            const bb = calculateBollingerBands(priceHistory);
-            document.getElementById('bbUpperValue').textContent = '$' + bb.upper.toFixed(2);
-            document.getElementById('bbLowerValue').textContent = '$' + bb.lower.toFixed(2);
-            
-            // حساب MACD
-            const macd = calculateMACD(priceHistory);
-            document.getElementById('macdValue').textContent = macd.value;
-            
-            // حساب Stochastic
-            const stoch = calculateStochastic(priceHistory);
-            document.getElementById('stochValue').textContent = stoch.k;
-            
-            // التحليل الشامل
-            const analysis = performComprehensiveAnalysis(currentPrice, priceHistory, { rsi, sma20, bb, macd, stoch });
-            
-            // عرض النتيجة
-            document.getElementById('recommendation').textContent = analysis.recommendation;
-            document.getElementById('recommendation').className = 'recommendation-action ' + analysis.actionClass;
-            
-            document.getElementById('confidenceFill').style.width = analysis.confidence + '%';
-            document.getElementById('confidenceText').textContent = analysis.confidence + '%';
-            
-            document.getElementById('analysisReason').textContent = analysis.reason;
-            
-            document.getElementById('totalScoreDisplay').textContent = analysis.totalScore + ' / 100';
-            
-            // إشارات المؤشرات
-            updateSignalBadges(rsi, macd, sma20, currentPrice, stoch);
-            
-            // المؤشرات التفصيلية
-            updateTechnicalIndicators(analysis.indicators);
-            
-            // تحديث صندوق التحليل
-            updateAnalysisBox(analysis.actionClass);
+    // ===== تحديث الواجهة =====
+    function updateDisplay(data) {
+        // تحديث السعر الحالي
+        currentGoldPrice = data.price;
+        priceHistory.push(currentGoldPrice);
+        
+        // الاحتفاظ بآخر 100 سعر فقط
+        if (priceHistory.length > 100) {
+            priceHistory.shift();
         }
-
-        // ===== حسابات المؤشرات الفنية =====
-        function calculateRSI(prices, period = 14) {
-            if (prices.length < period + 1) return 50;
-            
-            let gains = 0;
-            let losses = 0;
-            
-            for (let i = prices.length - period; i < prices.length - 1; i++) {
-                const change = prices[i + 1] - prices[i];
-                if (change > 0) gains += change;
-                else losses -= change;
-            }
-            
-            const avgGain = gains / period;
-            const avgLoss = losses / period;
-            
-            if (avgLoss === 0) return 100;
-            
-            const rs = avgGain / avgLoss;
-            return 100 - (100 / (1 + rs));
-        }
-
-        function calculateSMA(prices, period) {
-            if (prices.length < period) return prices[prices.length - 1];
-            const slice = prices.slice(-period);
-            return slice.reduce((a, b) => a + b, 0) / period;
-        }
-
-        function calculateBollingerBands(prices, period = 20, multiplier = 2) {
-            const sma = calculateSMA(prices, period);
-            
-            let sumSquaredDiff = 0;
-            const start = Math.max(0, prices.length - period);
-            const end = prices.length;
-            
-            for (let i = start; i < end; i++) {
-                sumSquaredDiff += Math.pow(prices[i] - sma, 2);
-            }
-            
-            const stdDev = Math.sqrt(sumSquaredDiff / Math.min(period, prices.length - start));
-            
-            return {
-                upper: sma + (stdDev * multiplier),
-                middle: sma,
-                lower: sma - (stdDev * multiplier)
-            };
-        }
-
-        function calculateMACD(prices) {
-            if (prices.length < 26) return { value: '0.00', signal: 'محايد' };
-            
-            const ema12 = calculateEMA(prices, 12);
-            const ema26 = calculateEMA(prices, 26);
-            const macdLine = ema12 - ema26;
-            
-            let signal = 'محايد';
-            if (macdLine > 0.5) signal = 'شراء';
-            else if (macdLine < -0.5) signal = 'بيع';
-            
-            return {
-                value: macdLine.toFixed(2),
-                signal: signal
-            };
-        }
-
-        function calculateEMA(prices, period) {
-            if (prices.length < period) return prices[prices.length - 1];
-            
-            const k = 2 / (period + 1);
-            let ema = calculateSMA(prices.slice(0, period), period);
-            
-            for (let i = period; i < prices.length; i++) {
-                ema = (prices[i] * k) + (ema * (1 - k));
-            }
-            
-            return ema;
-        }
-
-        function calculateStochastic(prices, period = 14) {
-            if (prices.length < period) return { k: 50, signal: 'محايد' };
-            
-            const slice = prices.slice(-period);
-            const high = Math.max(...slice);
-            const low = Math.min(...slice);
-            const current = prices[prices.length - 1];
-            
-            const k = ((current - low) / (high - low)) * 100;
-            
-            let signal = 'محايد';
-            if (k < 20) signal = 'شراء قوي';
-            else if (k < 40) signal = 'شراء';
-            else if (k > 80) signal = 'بيع قوي';
-            else if (k > 60) signal = 'بيع';
-            
-            return { k: k.toFixed(2), signal: signal };
-        }
-
-        // ===== التحليل الشامل =====
-        function performComprehensiveAnalysis(currentPrice, prices, indicators) {
-            let score = 50;
-            
-            if (indicators.rsi < 30) score += 20;
-            else if (indicators.rsi < 40) score += 10;
-            else if (indicators.rsi > 70) score -= 20;
-            else if (indicators.rsi > 60) score -= 10;
-            
-            if (currentPrice > indicators.sma20) score += 15;
-            else score -= 15;
-            
-            if (currentPrice <= indicators.bb.lower) score += 15;
-            else if (currentPrice >= indicators.bb.upper) score -= 15;
-            
-            const stochK = parseFloat(indicators.stoch.k);
-            if (stochK < 20) score += 10;
-            else if (stochK < 40) score += 5;
-            else if (stochK > 80) score -= 10;
-            else if (stochK > 60) score -= 5;
-            
-            if (prices.length >= 5) {
-                const trend = currentPrice - prices[prices.length - 5];
-                if (trend > 0) score += 10;
-                else score -= 10;
-            }
-            
-            score = Math.max(0, Math.min(100, score));
-            
-            let recommendation, actionClass, reason, confidence;
-            
-            if (score >= 80) {
-                recommendation = 'شراء قوي 🚀';
-                actionClass = 'buy';
-                confidence = 85 + Math.random() * 10;
-                reason = `نتيجة التحليل ${score.toFixed(0)}/100. جميع المؤشرات إيجابية مع اتجاه صعودي قوي.`;
-            } else if (score >= 60) {
-                recommendation = 'شراء 📈';
-                actionClass = 'buy';
-                confidence = 65 + Math.random() * 15;
-                reason = `نتيجة التحليل ${score.toFixed(0)}/100. أغلب المؤشرات إيجابية مع فرصة جيدة للشراء.`;
-            } else if (score <= 20) {
-                recommendation = 'بيع قوي 📉';
-                actionClass = 'sell';
-                confidence = 85 + Math.random() * 10;
-                reason = `نتيجة التحليل ${score.toFixed(0)}/100. جميع المؤشرات سلبية مع اتجاه هبوطي واضح.`;
-            } else if (score <= 40) {
-                recommendation = 'بيع ⚠️';
-                actionClass = 'sell';
-                confidence = 65 + Math.random() * 15;
-                reason = `نتيجة التحليل ${score.toFixed(0)}/100. أغلب المؤشرات سلبية مع ضغط بيع.`;
-            } else {
-                recommendation = 'انتظار ⏸️';
-                actionClass = 'hold';
-                confidence = 100 - Math.abs(score - 50) * 2;
-                reason = `نتيجة التحليل ${score.toFixed(0)}/100. إشارات مختلطة، الانتظار أفضل خيار.`;
-            }
-            
-            const detailedIndicators = [
-                { name: 'RSI', value: indicators.rsi.toFixed(2), status: getRSIStatus(indicators.rsi), signal: getRSISignal(indicators.rsi) },
-                { name: 'المتوسط المتحرك', value: '$' + indicators.sma20.toFixed(2), status: currentPrice > indicators.sma20 ? 'صاعد' : 'هابط', signal: currentPrice > indicators.sma20 ? 'bullish' : 'bearish' },
-                { name: 'Bollinger Bands', value: 'في النطاق', status: getBBStatus(currentPrice, indicators.bb), signal: getBBSignal(currentPrice, indicators.bb) },
-                { name: 'MACD', value: indicators.macd.value, status: indicators.macd.signal, signal: indicators.macd.signal === 'شراء' ? 'bullish' : indicators.macd.signal === 'بيع' ? 'bearish' : 'neutral' },
-                { name: 'Stochastic', value: indicators.stoch.k, status: indicators.stoch.signal, signal: getStochSignal(parseFloat(indicators.stoch.k)) },
-                { name: 'الاتجاه العام', value: getTrendStatus(prices), status: 'تحليل', signal: 'neutral' }
-            ];
-            
-            return {
-                recommendation,
-                actionClass,
-                reason,
-                confidence: Math.round(confidence),
-                totalScore: score.toFixed(1),
-                indicators: detailedIndicators
-            };
-        }
-
-        // ===== دوال مساعدة =====
-        function getRSIStatus(rsi) {
-            if (rsi < 30) return 'ذروة بيع';
-            if (rsi < 40) return 'بيع';
-            if (rsi > 70) return 'ذروة شراء';
-            if (rsi > 60) return 'شراء';
-            return 'متوازن';
-        }
-
-        function getRSISignal(rsi) {
-            if (rsi < 40) return 'bullish';
-            if (rsi > 60) return 'bearish';
-            return 'neutral';
-        }
-
-        function getBBStatus(price, bb) {
-            if (price <= bb.lower) return 'عند الحد السفلي';
-            if (price >= bb.upper) return 'عند الحد العلوي';
-            return 'في النطاق الطبيعي';
-        }
-
-        function getBBSignal(price, bb) {
-            if (price <= bb.lower) return 'bullish';
-            if (price >= bb.upper) return 'bearish';
-            return 'neutral';
-        }
-
-        function getStochSignal(k) {
-            if (k < 40) return 'bullish';
-            if (k > 60) return 'bearish';
-            return 'neutral';
-        }
-
-        function getTrendStatus(prices) {
-            if (prices.length < 5) return 'غير متاح';
-            const trend = prices[prices.length - 1] - prices[prices.length - 5];
-            return trend > 0 ? 'صاعد' : trend < 0 ? 'هابط' : 'مستقر';
-        }
-
-        function updateSignalBadges(rsi, macd, sma20, currentPrice, stoch) {
-            const rsiSignal = document.getElementById('rsiSignal');
-            if (rsi < 30) {
-                rsiSignal.textContent = 'شراء قوي';
-                rsiSignal.className = 'signal-badge signal-strong-buy';
-            } else if (rsi < 40) {
-                rsiSignal.textContent = 'شراء';
-                rsiSignal.className = 'signal-badge signal-buy';
-            } else if (rsi > 70) {
-                rsiSignal.textContent = 'بيع قوي';
-                rsiSignal.className = 'signal-badge signal-strong-sell';
-            } else if (rsi > 60) {
-                rsiSignal.textContent = 'بيع';
-                rsiSignal.className = 'signal-badge signal-sell';
-            } else {
-                rsiSignal.textContent = 'محايد';
-                rsiSignal.className = 'signal-badge signal-hold';
-            }
-            
-            const macdSignal = document.getElementById('macdSignal');
-            macdSignal.textContent = macd.signal;
-            if (macd.signal === 'شراء') {
-                macdSignal.className = 'signal-badge signal-buy';
-            } else if (macd.signal === 'بيع') {
-                macdSignal.className = 'signal-badge signal-sell';
-            } else {
-                macdSignal.className = 'signal-badge signal-hold';
-            }
-            
-            const maSignal = document.getElementById('maSignal');
-            if (currentPrice > sma20) {
-                maSignal.textContent = 'صاعد';
-                maSignal.className = 'signal-badge signal-buy';
-            } else {
-                maSignal.textContent = 'هابط';
-                maSignal.className = 'signal-badge signal-sell';
-            }
-            
-            const stochSignal = document.getElementById('stochSignal');
-            stochSignal.textContent = stoch.signal;
-            if (stoch.signal.includes('شراء')) {
-                stochSignal.className = 'signal-badge ' + (stoch.signal.includes('قوي') ? 'signal-strong-buy' : 'signal-buy');
-            } else if (stoch.signal.includes('بيع')) {
-                stochSignal.className = 'signal-badge ' + (stoch.signal.includes('قوي') ? 'signal-strong-sell' : 'signal-sell');
-            } else {
-                stochSignal.className = 'signal-badge signal-hold';
-            }
-        }
-
-        function updateTechnicalIndicators(indicators) {
-            const container = document.getElementById('technicalIndicators');
-            let html = '';
-            
-            indicators.forEach(ind => {
-                let signalClass = '';
-                if (ind.signal === 'bullish') signalClass = 'bullish';
-                else if (ind.signal === 'bearish') signalClass = 'bearish';
-                else signalClass = 'neutral';
-                
-                html += `
-                    <div class="indicator-item ${signalClass}">
-                        <div>
-                            <div class="indicator-name">${ind.name}</div>
-                            <div style="font-size: 0.85em; color: #b8c6db; margin-top: 5px;">${ind.value}</div>
-                        </div>
-                        <div class="indicator-value" style="color: ${
-                            signalClass === 'bullish' ? '#00ff88' : 
-                            signalClass === 'bearish' ? '#ff4757' : '#ffd700'
-                        }">${ind.status}</div>
-                    </div>
-                `;
-            });
-            
-            container.innerHTML = html;
-        }
-
-        function updateAnalysisBox(actionClass) {
-            const analysisBox = document.getElementById('analysisBox');
-            analysisBox.className = 'card analysis-box';
-            if (actionClass === 'buy') {
-                analysisBox.classList.add('buy');
-                document.getElementById('signalBadge').innerHTML = '<span class="signal-badge signal-buy">إشارة: شراء</span>';
-            } else if (actionClass === 'sell') {
-                analysisBox.classList.add('sell');
-                document.getElementById('signalBadge').innerHTML = '<span class="signal-badge signal-sell">إشارة: بيع</span>';
-            } else {
-                analysisBox.classList.add('hold');
-                document.getElementById('signalBadge').innerHTML = '<span class="signal-badge signal-hold">إشارة: انتظار</span>';
-            }
-        }
-
-        // ===== تحديث جدول التاريخ =====
-        function updateHistoryTable(data, change, changePercent) {
-            const tbody = document.getElementById('historyTable');
-            
-            if (tbody.rows.length === 1 && tbody.rows[0].cells[0].colSpan === 6) {
-                tbody.innerHTML = '';
-            }
-            
-            const row = tbody.insertRow(0);
-            const timeCell = row.insertCell(0);
-            const priceCell = row.insertCell(1);
-            const changeCell = row.insertCell(2);
-            const percentCell = row.insertCell(3);
-            const trendCell = row.insertCell(4);
-            const recommendCell = row.insertCell(5);
-            
-            const date = new Date();
-            timeCell.textContent = date.toLocaleTimeString('ar-EG');
-            priceCell.textContent = '$' + data.price.toFixed(2);
-            
-            if (change > 0) {
-                changeCell.innerHTML = '<span style="color: #00ff88; font-weight: 700;">▲ $' + Math.abs(change).toFixed(2) + '</span>';
-                percentCell.innerHTML = '<span style="color: #00ff88; font-weight: 700;">+' + changePercent.toFixed(2) + '%</span>';
-                trendCell.innerHTML = '<span style="color: #00ff88; font-weight: 700;">صاعد 📈</span>';
-            } else if (change < 0) {
-                changeCell.innerHTML = '<span style="color: #ff4757; font-weight: 700;">▼ $' + Math.abs(change).toFixed(2) + '</span>';
-                percentCell.innerHTML = '<span style="color: #ff4757; font-weight: 700;">' + changePercent.toFixed(2) + '%</span>';
-                trendCell.innerHTML = '<span style="color: #ff4757; font-weight: 700;">هابط 📉</span>';
-            } else {
-                changeCell.textContent = '━';
-                percentCell.textContent = '0.00%';
-                trendCell.innerHTML = '<span style="color: #ffd700;">مستقر ━</span>';
-            }
-            
-            const recommendation = document.getElementById('recommendation').textContent;
-            recommendCell.innerHTML = `<span style="padding: 5px 10px; border-radius: 5px; font-size: 0.85em; 
-                ${recommendation.includes('شراء') ? 'background: rgba(0,255,136,0.2); color: #00ff88;' : 
-                  recommendation.includes('بيع') ? 'background: rgba(255,71,87,0.2); color: #ff4757;' : 
-                  'background: rgba(255,215,0,0.2); color: #ffd700;'}">${recommendation}</span>`;
-            
-            while (tbody.rows.length > 10) {
-                tbody.deleteRow(tbody.rows.length - 1);
-            }
-        }
-
-        // ===== بدء التطبيق =====
-        window.addEventListener('load', function() {
-            const hasData = loadSavedData();
-            
-            if (hasData && priceHistory.length > 0) {
-                document.getElementById('loading').innerHTML = `
-                    <div style="color: #ffd700;">
-                        <div class="spinner"></div>
-                        <p>تحميل البيانات المحفوظة...</p>
-                    </div>
-                `;
-                
-                setTimeout(() => {
-                    const lastPrice = priceHistory[priceHistory.length - 1];
-                    const savedData = {
-                        price: lastPrice,
-                        timestamp: Math.floor(Date.now() / 1000),
-                        high_price: lastPrice * 1.01,
-                        low_price: lastPrice * 0.99,
-                        open_price: lastPrice,
-                        prev_close_price: priceHistory.length > 1 ? priceHistory[priceHistory.length - 2] : lastPrice,
-                        source: 'البيانات المحفوظة'
-                    };
-                    
-                    document.getElementById('loading').style.display = 'none';
-                    document.getElementById('mainContent').style.display = 'block';
-                    updateDisplay(savedData);
-                    
-                    setTimeout(fetchGoldPrice, 1000);
-                }, 800);
-            } else {
-                fetchGoldPrice();
-            }
-            
-            // تحديث تلقائي كل دقيقة
-            setInterval(fetchGoldPrice, 60000);
-            
-            // ضبط حجم Canvas عند تغيير حجم النافذة
-            window.addEventListener('resize', function() {
-                updateChart();
-            });
+        
+        // تحديث بيانات الرسم البياني
+        updateChartData(currentGoldPrice);
+        
+        // عرض السعر
+        document.getElementById('currentPrice').textContent = '$' + data.price.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
         });
-    </script>
+        
+        // حساب وعرض التغير
+        let change = 0;
+        let changePercent = 0;
+        
+        if (data.prev_close_price) {
+            change = data.price - data.prev_close_price;
+            changePercent = (change / data.prev_close_price) * 100;
+        } else if (previousPrice !== null) {
+            change = data.price - previousPrice;
+            changePercent = (change / previousPrice) * 100;
+        } else if (priceHistory.length >= 2) {
+            const prevPrice = priceHistory[priceHistory.length - 2];
+            change = data.price - prevPrice;
+            changePercent = (change / prevPrice) * 100;
+        }
+        
+        const changeEl = document.getElementById('priceChange');
+        if (change > 0) {
+            changeEl.className = 'price-change price-up';
+            changeEl.innerHTML = `▲ $${Math.abs(change).toFixed(2)} (+${changePercent.toFixed(2)}%)`;
+        } else if (change < 0) {
+            changeEl.className = 'price-change price-down';
+            changeEl.innerHTML = `▼ $${Math.abs(change).toFixed(2)} (${changePercent.toFixed(2)}%)`;
+        } else {
+            changeEl.className = 'price-change';
+            changeEl.innerHTML = `━ بدون تغيير`;
+        }
+        
+        // الإحصائيات
+        document.getElementById('highPrice').textContent = '$' + data.high_price.toFixed(2);
+        document.getElementById('lowPrice').textContent = '$' + data.low_price.toFixed(2);
+        document.getElementById('openPrice').textContent = '$' + data.open_price.toFixed(2);
+        document.getElementById('prevClose').textContent = '$' + (data.prev_close_price || data.price).toFixed(2);
+        
+        // التحليل الفني
+        performTechnicalAnalysis(data.price);
+        
+        // وقت التحديث
+        const date = new Date(data.timestamp * 1000);
+        let sourceText = '';
+        if (!isUsingRealData) {
+            sourceText = '<br><small style="color: #ff4757;">⚠️ استخدام بيانات محاكاة - تحقق من اتصال API</small>';
+        } else {
+            sourceText = '<br><small style="color: #00ff88;">✅ متصل بمصدر بيانات حقيقي</small>';
+        }
+        
+        document.getElementById('lastUpdate').innerHTML = 
+            `⏰ آخر تحديث: ${date.toLocaleString('ar-EG')}<br>` +
+            `<small style="color: #ffd700;">المصدر: ${data.source}</small>` +
+            sourceText;
+        
+        // تحديث الجدول
+        updateHistoryTable(data, change, changePercent);
+        
+        // تحديث الرسم البياني
+        updateChart();
+        
+        // حفظ السعر السابق
+        previousPrice = data.price;
+    }
+
+    // ===== تحديث بيانات الرسم البياني =====
+    function updateChartData(newPrice) {
+        const now = Date.now();
+        
+        // إضافة نقطة بيانات جديدة
+        chartHistory.push({
+            time: now,
+            price: newPrice,
+            timestamp: Math.floor(now / 1000)
+        });
+        
+        // الاحتفاظ بآخر 50 نقطة فقط
+        if (chartHistory.length > 50) {
+            chartHistory.shift();
+        }
+    }
+
+    // ===== الرسم البياني =====
+    function updateChart() {
+        const canvas = document.getElementById('priceChart');
+        const ctx = canvas.getContext('2d');
+        
+        // ضبط حجم Canvas
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 400;
+        
+        if (chartHistory.length < 2) {
+            // رسالة عند عدم وجود بيانات كافية
+            ctx.fillStyle = '#b8c6db';
+            ctx.font = '16px Cairo';
+            ctx.textAlign = 'center';
+            ctx.fillText('جاري جمع بيانات كافية للرسم البياني...', canvas.width / 2, canvas.height / 2);
+            return;
+        }
+        
+        // تنظيف Canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // إعداد المساحات
+        const padding = { top: 40, right: 30, bottom: 50, left: 60 };
+        const chartWidth = canvas.width - padding.left - padding.right;
+        const chartHeight = canvas.height - padding.top - padding.bottom;
+        
+        // إيجاد الحد الأدنى والأقصى للأسعار
+        let minPrice = Infinity;
+        let maxPrice = -Infinity;
+        let minTime = Infinity;
+        let maxTime = -Infinity;
+        
+        chartHistory.forEach(item => {
+            if (item.price < minPrice) minPrice = item.price;
+            if (item.price > maxPrice) maxPrice = item.price;
+            if (item.time < minTime) minTime = item.time;
+            if (item.time > maxTime) maxTime = item.time;
+        });
+        
+        const priceRange = maxPrice - minPrice;
+        const timeRange = maxTime - minTime;
+        
+        // رسم الشبكة الخلفية
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        
+        // خطوط أفقية
+        for (let i = 0; i <= 5; i++) {
+            const y = padding.top + (chartHeight / 5) * i;
+            ctx.beginPath();
+            ctx.moveTo(padding.left, y);
+            ctx.lineTo(canvas.width - padding.right, y);
+            ctx.stroke();
+            
+            // تسميات الأسعار
+            ctx.fillStyle = '#b8c6db';
+            ctx.font = '12px Cairo';
+            ctx.textAlign = 'right';
+            const price = maxPrice - (priceRange / 5) * i;
+            ctx.fillText('$' + price.toFixed(0), padding.left - 10, y + 4);
+        }
+        
+        // رسم الخط البياني
+        ctx.beginPath();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#ffd700';
+        
+        chartHistory.forEach((item, index) => {
+            const x = padding.left + ((item.time - minTime) / timeRange) * chartWidth;
+            const y = padding.top + chartHeight - ((item.price - minPrice) / priceRange) * chartHeight;
+            
+            if (index === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        });
+        
+        ctx.stroke();
+        
+        // رسم النقاط
+        ctx.fillStyle = '#ffd700';
+        chartHistory.forEach((item, index) => {
+            const x = padding.left + ((item.time - minTime) / timeRange) * chartWidth;
+            const y = padding.top + chartHeight - ((item.price - minPrice) / priceRange) * chartHeight;
+            
+            // رسم نقاط صغيرة
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // هالة حول النقطة الأخيرة
+            if (index === chartHistory.length - 1) {
+                ctx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(x, y, 8, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        });
+        
+        // تسميات الوقت
+        ctx.fillStyle = '#b8c6db';
+        ctx.font = '11px Cairo';
+        ctx.textAlign = 'center';
+        
+        if (chartHistory.length >= 3) {
+            const startTime = new Date(chartHistory[0].time);
+            const middleTime = new Date(chartHistory[Math.floor(chartHistory.length / 2)].time);
+            const endTime = new Date(chartHistory[chartHistory.length - 1].time);
+            
+            const startX = padding.left;
+            const middleX = padding.left + chartWidth / 2;
+            const endX = padding.left + chartWidth;
+            
+            ctx.fillText(startTime.toLocaleTimeString('ar-EG', {hour: '2-digit', minute: '2-digit'}), 
+                       startX, canvas.height - padding.bottom + 20);
+            ctx.fillText(middleTime.toLocaleTimeString('ar-EG', {hour: '2-digit', minute: '2-digit'}), 
+                       middleX, canvas.height - padding.bottom + 20);
+            ctx.fillText(endTime.toLocaleTimeString('ar-EG', {hour: '2-digit', minute: '2-digit'}), 
+                       endX, canvas.height - padding.bottom + 20);
+        }
+        
+        // عنوان الرسم البياني
+        ctx.fillStyle = '#ffd700';
+        ctx.font = 'bold 16px Cairo';
+        ctx.textAlign = 'center';
+        ctx.fillText('أسعار الذهب (XAU/USD) - تحديث حي', canvas.width / 2, padding.top - 10);
+        
+        // إضافة خط متوسط السعر
+        const avgPrice = (minPrice + maxPrice) / 2;
+        const avgY = padding.top + chartHeight - ((avgPrice - minPrice) / priceRange) * chartHeight;
+        
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(padding.left, avgY);
+        ctx.lineTo(canvas.width - padding.right, avgY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // ===== التحليل الفني =====
+    function performTechnicalAnalysis(currentPrice) {
+        if (priceHistory.length < 3) return;
+        
+        // حساب RSI
+        const rsi = calculateRSI(priceHistory);
+        document.getElementById('rsiValue').textContent = rsi.toFixed(2);
+        
+        // حساب المتوسط المتحرك
+        const sma20 = calculateSMA(priceHistory, 20);
+        document.getElementById('maValue').textContent = '$' + sma20.toFixed(2);
+        
+        // حساب Bollinger Bands
+        const bb = calculateBollingerBands(priceHistory);
+        document.getElementById('bbUpperValue').textContent = '$' + bb.upper.toFixed(2);
+        document.getElementById('bbLowerValue').textContent = '$' + bb.lower.toFixed(2);
+        
+        // حساب MACD
+        const macd = calculateMACD(priceHistory);
+        document.getElementById('macdValue').textContent = macd.value;
+        
+        // حساب Stochastic
+        const stoch = calculateStochastic(priceHistory);
+        document.getElementById('stochValue').textContent = stoch.k;
+        
+        // التحليل الشامل
+        const analysis = performComprehensiveAnalysis(currentPrice, priceHistory, { rsi, sma20, bb, macd, stoch });
+        
+        // عرض النتيجة
+        document.getElementById('recommendation').textContent = analysis.recommendation;
+        document.getElementById('recommendation').className = 'recommendation-action ' + analysis.actionClass;
+        
+        document.getElementById('confidenceFill').style.width = analysis.confidence + '%';
+        document.getElementById('confidenceText').textContent = analysis.confidence + '%';
+        
+        document.getElementById('analysisReason').textContent = analysis.reason;
+        
+        document.getElementById('totalScoreDisplay').textContent = analysis.totalScore + ' / 100';
+        
+        // إشارات المؤشرات
+        updateSignalBadges(rsi, macd, sma20, currentPrice, stoch);
+        
+        // المؤشرات التفصيلية
+        updateTechnicalIndicators(analysis.indicators);
+        
+        // تحديث صندوق التحليل
+        updateAnalysisBox(analysis.actionClass);
+    }
+
+    // ===== حسابات المؤشرات الفنية =====
+    function calculateRSI(prices, period = 14) {
+        if (prices.length < period + 1) return 50;
+        
+        let gains = 0;
+        let losses = 0;
+        
+        for (let i = prices.length - period; i < prices.length - 1; i++) {
+            const change = prices[i + 1] - prices[i];
+            if (change > 0) gains += change;
+            else losses -= change;
+        }
+        
+        const avgGain = gains / period;
+        const avgLoss = losses / period;
+        
+        if (avgLoss === 0) return 100;
+        
+        const rs = avgGain / avgLoss;
+        return 100 - (100 / (1 + rs));
+    }
+
+    function calculateSMA(prices, period) {
+        if (prices.length < period) return prices[prices.length - 1];
+        const slice = prices.slice(-period);
+        return slice.reduce((a, b) => a + b, 0) / period;
+    }
+
+    function calculateBollingerBands(prices, period = 20, multiplier = 2) {
+        const sma = calculateSMA(prices, period);
+        
+        let sumSquaredDiff = 0;
+        const start = Math.max(0, prices.length - period);
+        const end = prices.length;
+        
+        for (let i = start; i < end; i++) {
+            sumSquaredDiff += Math.pow(prices[i] - sma, 2);
+        }
+        
+        const stdDev = Math.sqrt(sumSquaredDiff / Math.min(period, prices.length - start));
+        
+        return {
+            upper: sma + (stdDev * multiplier),
+            middle: sma,
+            lower: sma - (stdDev * multiplier)
+        };
+    }
+
+    function calculateMACD(prices) {
+        if (prices.length < 26) return { value: '0.00', signal: 'محايد' };
+        
+        const ema12 = calculateEMA(prices, 12);
+        const ema26 = calculateEMA(prices, 26);
+        const macdLine = ema12 - ema26;
+        
+        let signal = 'محايد';
+        if (macdLine > 0.5) signal = 'شراء';
+        else if (macdLine < -0.5) signal = 'بيع';
+        
+        return {
+            value: macdLine.toFixed(2),
+            signal: signal
+        };
+    }
+
+    function calculateEMA(prices, period) {
+        if (prices.length < period) return prices[prices.length - 1];
+        
+        const k = 2 / (period + 1);
+        let ema = calculateSMA(prices.slice(0, period), period);
+        
+        for (let i = period; i < prices.length; i++) {
+            ema = (prices[i] * k) + (ema * (1 - k));
+        }
+        
+        return ema;
+    }
+
+    function calculateStochastic(prices, period = 14) {
+        if (prices.length < period) return { k: 50, signal: 'محايد' };
+        
+        const slice = prices.slice(-period);
+        const high = Math.max(...slice);
+        const low = Math.min(...slice);
+        const current = prices[prices.length - 1];
+        
+        const k = ((current - low) / (high - low)) * 100;
+        
+        let signal = 'محايد';
+        if (k < 20) signal = 'شراء قوي';
+        else if (k < 40) signal = 'شراء';
+        else if (k > 80) signal = 'بيع قوي';
+        else if (k > 60) signal = 'بيع';
+        
+        return { k: k.toFixed(2), signal: signal };
+    }
+
+    // ===== التحليل الشامل =====
+    function performComprehensiveAnalysis(currentPrice, prices, indicators) {
+        let score = 50;
+        
+        if (indicators.rsi < 30) score += 20;
+        else if (indicators.rsi < 40) score += 10;
+        else if (indicators.rsi > 70) score -= 20;
+        else if (indicators.rsi > 60) score -= 10;
+        
+        if (currentPrice > indicators.sma20) score += 15;
+        else score -= 15;
+        
+        if (currentPrice <= indicators.bb.lower) score += 15;
+        else if (currentPrice >= indicators.bb.upper) score -= 15;
+        
+        const stochK = parseFloat(indicators.stoch.k);
+        if (stochK < 20) score += 10;
+        else if (stochK < 40) score += 5;
+        else if (stochK > 80) score -= 10;
+        else if (stochK > 60) score -= 5;
+        
+        if (prices.length >= 5) {
+            const trend = currentPrice - prices[prices.length - 5];
+            if (trend > 0) score += 10;
+            else score -= 10;
+        }
+        
+        score = Math.max(0, Math.min(100, score));
+        
+        let recommendation, actionClass, reason, confidence;
+        
+        if (score >= 80) {
+            recommendation = 'شراء قوي 🚀';
+            actionClass = 'buy';
+            confidence = 85 + Math.random() * 10;
+            reason = `نتيجة التحليل ${score.toFixed(0)}/100. جميع المؤشرات إيجابية مع اتجاه صعودي قوي.`;
+        } else if (score >= 60) {
+            recommendation = 'شراء 📈';
+            actionClass = 'buy';
+            confidence = 65 + Math.random() * 15;
+            reason = `نتيجة التحليل ${score.toFixed(0)}/100. أغلب المؤشرات إيجابية مع فرصة جيدة للشراء.`;
+        } else if (score <= 20) {
+            recommendation = 'بيع قوي 📉';
+            actionClass = 'sell';
+            confidence = 85 + Math.random() * 10;
+            reason = `نتيجة التحليل ${score.toFixed(0)}/100. جميع المؤشرات سلبية مع اتجاه هبوطي واضح.`;
+        } else if (score <= 40) {
+            recommendation = 'بيع ⚠️';
+            actionClass = 'sell';
+            confidence = 65 + Math.random() * 15;
+            reason = `نتيجة التحليل ${score.toFixed(0)}/100. أغلب المؤشرات سلبية مع ضغط بيع.`;
+        } else {
+            recommendation = 'انتظار ⏸️';
+            actionClass = 'hold';
+            confidence = 100 - Math.abs(score - 50) * 2;
+            reason = `نتيجة التحليل ${score.toFixed(0)}/100. إشارات مختلطة، الانتظار أفضل خيار.`;
+        }
+        
+        const detailedIndicators = [
+            { name: 'RSI', value: indicators.rsi.toFixed(2), status: getRSIStatus(indicators.rsi), signal: getRSISignal(indicators.rsi) },
+            { name: 'المتوسط المتحرك', value: '$' + indicators.sma20.toFixed(2), status: currentPrice > indicators.sma20 ? 'صاعد' : 'هابط', signal: currentPrice > indicators.sma20 ? 'bullish' : 'bearish' },
+            { name: 'Bollinger Bands', value: 'في النطاق', status: getBBStatus(currentPrice, indicators.bb), signal: getBBSignal(currentPrice, indicators.bb) },
+            { name: 'MACD', value: indicators.macd.value, status: indicators.macd.signal, signal: indicators.macd.signal === 'شراء' ? 'bullish' : indicators.macd.signal === 'بيع' ? 'bearish' : 'neutral' },
+            { name: 'Stochastic', value: indicators.stoch.k, status: indicators.stoch.signal, signal: getStochSignal(parseFloat(indicators.stoch.k)) },
+            { name: 'الاتجاه العام', value: getTrendStatus(prices), status: 'تحليل', signal: 'neutral' }
+        ];
+        
+        return {
+            recommendation,
+            actionClass,
+            reason,
+            confidence: Math.round(confidence),
+            totalScore: score.toFixed(1),
+            indicators: detailedIndicators
+        };
+    }
+
+    // ===== دوال مساعدة =====
+    function getRSIStatus(rsi) {
+        if (rsi < 30) return 'ذروة بيع';
+        if (rsi < 40) return 'بيع';
+        if (rsi > 70) return 'ذروة شراء';
+        if (rsi > 60) return 'شراء';
+        return 'متوازن';
+    }
+
+    function getRSISignal(rsi) {
+        if (rsi < 40) return 'bullish';
+        if (rsi > 60) return 'bearish';
+        return 'neutral';
+    }
+
+    function getBBStatus(price, bb) {
+        if (price <= bb.lower) return 'عند الحد السفلي';
+        if (price >= bb.upper) return 'عند الحد العلوي';
+        return 'في النطاق الطبيعي';
+    }
+
+    function getBBSignal(price, bb) {
+        if (price <= bb.lower) return 'bullish';
+        if (price >= bb.upper) return 'bearish';
+        return 'neutral';
+    }
+
+    function getStochSignal(k) {
+        if (k < 40) return 'bullish';
+        if (k > 60) return 'bearish';
+        return 'neutral';
+    }
+
+    function getTrendStatus(prices) {
+        if (prices.length < 5) return 'غير متاح';
+        const trend = prices[prices.length - 1] - prices[prices.length - 5];
+        return trend > 0 ? 'صاعد' : trend < 0 ? 'هابط' : 'مستقر';
+    }
+
+    function updateSignalBadges(rsi, macd, sma20, currentPrice, stoch) {
+        const rsiSignal = document.getElementById('rsiSignal');
+        if (rsi < 30) {
+            rsiSignal.textContent = 'شراء قوي';
+            rsiSignal.className = 'signal-badge signal-strong-buy';
+        } else if (rsi < 40) {
+            rsiSignal.textContent = 'شراء';
+            rsiSignal.className = 'signal-badge signal-buy';
+        } else if (rsi > 70) {
+            rsiSignal.textContent = 'بيع قوي';
+            rsiSignal.className = 'signal-badge signal-strong-sell';
+        } else if (rsi > 60) {
+            rsiSignal.textContent = 'بيع';
+            rsiSignal.className = 'signal-badge signal-sell';
+        } else {
+            rsiSignal.textContent = 'محايد';
+            rsiSignal.className = 'signal-badge signal-hold';
+        }
+        
+        const macdSignal = document.getElementById('macdSignal');
+        macdSignal.textContent = macd.signal;
+        if (macd.signal === 'شراء') {
+            macdSignal.className = 'signal-badge signal-buy';
+        } else if (macd.signal === 'بيع') {
+            macdSignal.className = 'signal-badge signal-sell';
+        } else {
+            macdSignal.className = 'signal-badge signal-hold';
+        }
+        
+        const maSignal = document.getElementById('maSignal');
+        if (currentPrice > sma20) {
+            maSignal.textContent = 'صاعد';
+            maSignal.className = 'signal-badge signal-buy';
+        } else {
+            maSignal.textContent = 'هابط';
+            maSignal.className = 'signal-badge signal-sell';
+        }
+        
+        const stochSignal = document.getElementById('stochSignal');
+        stochSignal.textContent = stoch.signal;
+        if (stoch.signal.includes('شراء')) {
+            stochSignal.className = 'signal-badge ' + (stoch.signal.includes('قوي') ? 'signal-strong-buy' : 'signal-buy');
+        } else if (stoch.signal.includes('بيع')) {
+            stochSignal.className = 'signal-badge ' + (stoch.signal.includes('قوي') ? 'signal-strong-sell' : 'signal-sell');
+        } else {
+            stochSignal.className = 'signal-badge signal-hold';
+        }
+    }
+
+    function updateTechnicalIndicators(indicators) {
+        const container = document.getElementById('technicalIndicators');
+        let html = '';
+        
+        indicators.forEach(ind => {
+            let signalClass = '';
+            if (ind.signal === 'bullish') signalClass = 'bullish';
+            else if (ind.signal === 'bearish') signalClass = 'bearish';
+            else signalClass = 'neutral';
+            
+            html += `
+                <div class="indicator-item ${signalClass}">
+                    <div>
+                        <div class="indicator-name">${ind.name}</div>
+                        <div style="font-size: 0.85em; color: #b8c6db; margin-top: 5px;">${ind.value}</div>
+                    </div>
+                    <div class="indicator-value" style="color: ${
+                        signalClass === 'bullish' ? '#00ff88' : 
+                        signalClass === 'bearish' ? '#ff4757' : '#ffd700'
+                    }">${ind.status}</div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
+
+    function updateAnalysisBox(actionClass) {
+        const analysisBox = document.getElementById('analysisBox');
+        analysisBox.className = 'card analysis-box';
+        if (actionClass === 'buy') {
+            analysisBox.classList.add('buy');
+            document.getElementById('signalBadge').innerHTML = '<span class="signal-badge signal-buy">إشارة: شراء</span>';
+        } else if (actionClass === 'sell') {
+            analysisBox.classList.add('sell');
+            document.getElementById('signalBadge').innerHTML = '<span class="signal-badge signal-sell">إشارة: بيع</span>';
+        } else {
+            analysisBox.classList.add('hold');
+            document.getElementById('signalBadge').innerHTML = '<span class="signal-badge signal-hold">إشارة: انتظار</span>';
+        }
+    }
+
+    // ===== تحديث جدول التاريخ =====
+    function updateHistoryTable(data, change, changePercent) {
+        const tbody = document.getElementById('historyTable');
+        
+        if (tbody.rows.length === 1 && tbody.rows[0].cells[0].colSpan === 6) {
+            tbody.innerHTML = '';
+        }
+        
+        const row = tbody.insertRow(0);
+        const timeCell = row.insertCell(0);
+        const priceCell = row.insertCell(1);
+        const changeCell = row.insertCell(2);
+        const percentCell = row.insertCell(3);
+        const trendCell = row.insertCell(4);
+        const recommendCell = row.insertCell(5);
+        
+        const date = new Date();
+        timeCell.textContent = date.toLocaleTimeString('ar-EG');
+        priceCell.textContent = '$' + data.price.toFixed(2);
+        
+        if (change > 0) {
+            changeCell.innerHTML = '<span style="color: #00ff88; font-weight: 700;">▲ $' + Math.abs(change).toFixed(2) + '</span>';
+            percentCell.innerHTML = '<span style="color: #00ff88; font-weight: 700;">+' + changePercent.toFixed(2) + '%</span>';
+            trendCell.innerHTML = '<span style="color: #00ff88; font-weight: 700;">صاعد 📈</span>';
+        } else if (change < 0) {
+            changeCell.innerHTML = '<span style="color: #ff4757; font-weight: 700;">▼ $' + Math.abs(change).toFixed(2) + '</span>';
+            percentCell.innerHTML = '<span style="color: #ff4757; font-weight: 700;">' + changePercent.toFixed(2) + '%</span>';
+            trendCell.innerHTML = '<span style="color: #ff4757; font-weight: 700;">هابط 📉</span>';
+        } else {
+            changeCell.textContent = '━';
+            percentCell.textContent = '0.00%';
+            trendCell.innerHTML = '<span style="color: #ffd700;">مستقر ━</span>';
+        }
+        
+        const recommendation = document.getElementById('recommendation').textContent;
+        recommendCell.innerHTML = `<span style="padding: 5px 10px; border-radius: 5px; font-size: 0.85em; 
+            ${recommendation.includes('شراء') ? 'background: rgba(0,255,136,0.2); color: #00ff88;' : 
+              recommendation.includes('بيع') ? 'background: rgba(255,71,87,0.2); color: #ff4757;' : 
+              'background: rgba(255,215,0,0.2); color: #ffd700;'}">${recommendation}</span>`;
+        
+        while (tbody.rows.length > 10) {
+            tbody.deleteRow(tbody.rows.length - 1);
+        }
+    }
+
+    // ===== بدء التطبيق =====
+    window.addEventListener('load', function() {
+        const hasData = loadSavedData();
+        
+        if (hasData && priceHistory.length > 0) {
+            document.getElementById('loading').innerHTML = `
+                <div style="color: #ffd700;">
+                    <div class="spinner"></div>
+                    <p>تحميل البيانات المحفوظة...</p>
+                </div>
+            `;
+            
+            setTimeout(() => {
+                const lastPrice = priceHistory[priceHistory.length - 1];
+                const savedData = {
+                    price: lastPrice,
+                    timestamp: Math.floor(Date.now() / 1000),
+                    high_price: lastPrice * 1.01,
+                    low_price: lastPrice * 0.99,
+                    open_price: lastPrice,
+                    prev_close_price: priceHistory.length > 1 ? priceHistory[priceHistory.length - 2] : lastPrice,
+                    source: 'البيانات المحفوظة'
+                };
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+                updateDisplay(savedData);
+                
+                setTimeout(fetchGoldPrice, 1000);
+            }, 800);
+        } else {
+            fetchGoldPrice();
+        }
+        
+        // تحديث تلقائي كل دقيقة
+        setInterval(fetchGoldPrice, 60000);
+        
+        // ضبط حجم Canvas عند تغيير حجم النافذة
+        window.addEventListener('resize', function() {
+            updateChart();
+        });
+    });
+</script>
 </body>
 </html>
